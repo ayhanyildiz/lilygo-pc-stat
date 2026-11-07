@@ -39,7 +39,82 @@ This firmware is configured for this board's screen and pins. Other ESP32 boards
 T-Dongle-S3 Plus, and Dual variants are **not validated** and need adaptation.
 Tested on an Intel Core i9-14900KF and NVIDIA GeForce RTX 5080 with Python 3.14.
 
-## Setup
+## Easy installation: no compiling required
+
+You need the original **LILYGO T-Dongle-S3**, a Windows PC, desktop **Chrome or
+Edge**, and **Python 3.10 or later** for the PC helper. The board firmware can be
+installed from your browser; you do **not** need PlatformIO or Arduino IDE for
+this method. Flashing replaces the firmware currently on the dongle.
+
+### 1. Flash the dongle in your browser
+
+1. If the helper is running, stop it with `Stop Monitor.ps1`. Close other serial
+   monitors so the browser can use the USB port.
+2. Unplug the dongle. Hold **BOOT** while plugging it in, then release BOOT.
+3. Open **[Flash LILYGO PC Stat with ESP Launchpad](https://espressif.github.io/esp-launchpad/minimal-launchpad/?flashConfigURL=https%3A%2F%2Fraw.githubusercontent.com%2Fayhanyildiz%2Flilygo-pc-stat%2Fmain%2Ffirmware%2Flaunchpad.toml)**
+   in desktop Chrome or Edge. The link loads this project's compiled firmware.
+4. Follow the page's connection/flashing prompts and select the dongle's serial
+   port (often listed as **USB Serial Device** or **Espressif**). Wait for flashing
+   to finish. Only the original T-Dongle-S3 is supported by this image.
+5. Disconnect the browser's serial connection or close its tab. Unplug and reinsert
+   the dongle **without holding BOOT**. Gauges showing `--` are expected for now.
+
+**Manual alternative:** download **[tdongle-s3-pc-stat.bin](https://raw.githubusercontent.com/ayhanyildiz/lilygo-pc-stat/main/firmware/tdongle-s3-pc-stat.bin)**,
+open [ESP Launchpad](https://espressif.github.io/esp-launchpad/), and use its **DIY**
+mode. Select this merged `.bin` file and enter flash address **`0x0`**, then flash.
+If the download opens instead of saving, right-click the link and choose **Save
+link as**. This is compiled firmware, not the C++ source or a ZIP archive. It
+contains all required boot components. Do not use `.pio/build/tdongle/firmware.bin`
+at `0x0`; that developer output contains only the app.
+
+### 2. Set up the Windows helper
+
+Flashing installs the display software. A small helper on your PC is still
+required to send **your PC's live usage** over USB.
+
+1. Download the **[project ZIP](https://github.com/ayhanyildiz/lilygo-pc-stat/archive/refs/heads/main.zip)**
+   and use Windows **Extract All**. Keep the extracted folder; do not run scripts
+   from inside the ZIP.
+2. Install [Python 3.10+ for Windows](https://www.python.org/downloads/windows/)
+   if needed. Enable the installer's Python/PATH option when offered.
+3. Open the extracted project folder in File Explorer. Type `powershell` in its
+   address bar and press Enter to open PowerShell in that folder.
+4. Run setup once:
+
+   ```powershell
+   .\Setup.ps1
+   ```
+
+5. Start the helper:
+
+   ```powershell
+   & '.\Start Monitor.ps1'
+   ```
+
+Live readings should appear within a few seconds. Tap **BOOT** briefly to flip
+the display if needed. Keep the dongle plugged into the PC being monitored.
+You can close PowerShell after launching; the helper runs in the background.
+
+If PowerShell says a script is blocked, review the scripts first. To unblock only
+these downloaded files, run the following in the project folder and retry:
+
+```powershell
+Unblock-File -LiteralPath '.\Setup.ps1', '.\Start Monitor.ps1', '.\Stop Monitor.ps1'
+```
+
+An organizational execution policy may still prevent scripts from running;
+contact its administrator rather than changing machine-wide security settings.
+
+After restarting Windows, run `Start Monitor.ps1` again. No automatic startup
+task is installed. To stop the helper, run `& '.\Stop Monitor.ps1'`.
+
+If the display stays on `--`, make sure ESP Launchpad has released the serial
+port and inspect `.pio/monitor.log`. NVIDIA GPU readings require the NVIDIA
+driver's `nvidia-smi`; CPU and MEM still work without it.
+
+## Developer setup and building from source
+
+Skip this section if you used the browser installer above.
 
 Clone the repository and open PowerShell in the project directory:
 
@@ -107,6 +182,20 @@ Diagnostics, with the background helper stopped:
 .\.venv\Scripts\python.exe monitor.py
 ```
 
+### Build a new browser-flashable image
+
+After changing firmware, regenerate the merged download and checksum:
+
+```powershell
+.\.venv\Scripts\python.exe -m platformio run --target package
+```
+
+This produces `firmware/tdongle-s3-pc-stat.bin` and `firmware/SHA256SUMS`.
+Commit them together with the corresponding source change before publishing.
+The package includes the bootloader at `0x0`, partition table at `0x8000`,
+OTA initialization at `0xe000`, and app at `0x10000`.
+The browser writes the single merged file at **`0x0`**.
+
 ## How it works
 
 ```text
@@ -171,6 +260,8 @@ Setup.ps1             Local Python environment setup
 Start Monitor.ps1     Launch the helper hidden
 Stop Monitor.ps1      Stop this project's helper
 requirements*.txt     Runtime and build dependencies
+firmware/             Merged download, checksum and browser-flasher configuration
+scripts/              Reproducible firmware packaging target
 docs/hero.png         Illustrated README banner
 ```
 
