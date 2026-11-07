@@ -1,0 +1,183 @@
+# LILYGO T-Dongle-S3 PC Stat
+
+![LILYGO PC Stat illustration showing GPU, CPU and MEM rings](docs/hero.png)
+
+**Your PC. At a glance.** A USB performance monitor for the **LILYGO T-Dongle-S3**,
+with live **GPU, CPU, and RAM usage**. Three portrait ring gauges show a large
+percentage above each label: **GPU → CPU → MEM**. Each ring fills clockwise
+from 12 o'clock, like a clock.
+
+*The banner is an AI-generated illustration with example readings, not a photograph.*
+
+## Features
+
+- Updates once a second over USB. No Wi-Fi credentials or cloud service.
+- Green GPU, cyan CPU, and violet memory gauges.
+- Tap BOOT to rotate the screen 180°. The default orientation is flipped.
+- Missing or disconnected readings show `--`; old values clear after 4.5 seconds.
+- Windows helper runs hidden and reconnects automatically after unplugging.
+
+| Label | Reading | Source |
+| --- | --- | --- |
+| GPU | NVIDIA GPU utilization | Driver-provided `nvidia-smi`, GPU index 0 |
+| CPU | Overall CPU busy time | Windows `GetSystemTimes` |
+| MEM | Physical RAM used, as a percentage of total | Windows `GlobalMemoryStatusEx` |
+
+The helper also collects VRAM usage for future layouts; **MEM means system RAM**.
+CPU readings may differ from Task Manager's frequency-adjusted utilization.
+NVIDIA GPU utilization may differ from Task Manager's busiest-engine metric.
+
+## Requirements
+
+- Original **LILYGO T-Dongle-S3**: ESP32-S3, 16 MB flash, no PSRAM,
+  0.96-inch ST7735 screen, 80 × 160 pixels.
+- Windows 10 or 11, Python 3.10+, and a USB port.
+- NVIDIA GPU with `nvidia-smi` for the GPU gauge. Without it, CPU and MEM
+  still work and GPU shows `--`.
+
+This firmware is configured for this board's screen and pins. Other ESP32 boards,
+T-Dongle-S3 Plus, and Dual variants are **not validated** and need adaptation.
+Tested on an Intel Core i9-14900KF and NVIDIA GeForce RTX 5080 with Python 3.14.
+
+## Setup
+
+Clone the repository and open PowerShell in the project directory:
+
+```powershell
+git clone https://github.com/ayhanyildiz/lilygo-pc-stat.git
+cd lilygo-pc-stat
+.\Setup.ps1
+```
+
+Setup creates `.venv` and installs the serial dependency. If Python is not found:
+
+```powershell
+.\Setup.ps1 -PythonPath 'C:\path\to\python.exe'
+```
+
+If your PowerShell policy blocks downloaded scripts, review the scripts and
+unblock the individual files with `Unblock-File` before running them.
+
+### Build and upload firmware
+
+Stop the helper if it is running, then install the build tools:
+
+```powershell
+& '.\Stop Monitor.ps1'
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m platformio run
+.\.venv\Scripts\python.exe -m serial.tools.list_ports -v
+```
+
+Find the dongle's COM port, then upload (replace `COM6` as needed):
+
+```powershell
+.\.venv\Scripts\python.exe -m platformio run --target upload --upload-port COM6
+```
+
+If uploading fails, unplug the dongle, hold **BOOT** while inserting it, release
+BOOT, and retry. After uploading, unplug and reinsert normally without BOOT.
+The gauges show `--` until the helper starts sending data.
+
+### Start live readings
+
+```powershell
+& '.\Start Monitor.ps1'
+```
+
+The helper runs hidden and discovers the dongle automatically. To stop it:
+
+```powershell
+& '.\Stop Monitor.ps1'
+```
+
+Logs are stored in `.pio/monitor.log`. No Windows startup task is installed;
+run the launcher again after restarting Windows.
+
+Diagnostics, with the background helper stopped:
+
+```powershell
+# Read actual metrics without USB.
+.\.venv\Scripts\python.exe monitor.py --sample
+
+# Verify five frames acknowledged by the firmware after drawing.
+.\.venv\Scripts\python.exe monitor.py --port COM6 --frames 5
+
+# Run visibly until Ctrl+C.
+.\.venv\Scripts\python.exe monitor.py
+```
+
+## How it works
+
+```text
+Windows CPU/RAM APIs + NVIDIA nvidia-smi
+                    |
+               monitor.py
+                    | USB serial, once per second
+                    v
+        ESP32-S3 + TFT_eSPI sprite
+                    |
+              GPU / CPU / MEM
+```
+
+The helper checks firmware identity with `HELLO` / `PCMON,1`. Telemetry uses
+newline-terminated ASCII frames and acknowledgements:
+
+```text
+M,<sequence>,<cpu>,<gpu>,<ram>,<vram>
+ACK,<sequence>
+```
+
+Percentages range from 0 to 100; `-1` means unavailable. The firmware validates
+frames, draws the display, and acknowledges them. A full-screen sprite avoids
+flicker. The helper has no network listener and needs no administrator privileges.
+
+## Display configuration
+
+| Signal | GPIO |
+| --- | --- |
+| MOSI / clock | 3 / 5 |
+| CS / DC / reset | 4 / 2 / 1 |
+| Backlight, active low | 38 |
+| BOOT | 0 |
+
+The build pins Espressif32 to `7.0.1` and TFT_eSPI to `2.5.43`, using Arduino
+ESP32 2.0.17. Flash is configured for 16 MB, DIO at 80 MHz.
+**Keep `USE_FSPI_PORT` enabled**: it maps TFT_eSPI's direct registers to SPI2
+correctly with this core. Removing it can stall initialization and leave a black screen.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Gauges show `--` | Start the helper and read `.pio/monitor.log`. |
+| GPU alone shows `--` | Run `nvidia-smi`; GPU telemetry currently supports NVIDIA. |
+| COM port busy | Stop the helper and close other serial monitors before flashing. |
+| Upload times out | Hold BOOT during insertion, release it, then retry. |
+| Black screen after flashing | Reinsert without BOOT; confirm the board model and `USE_FSPI_PORT`. |
+| Screen upside down | Briefly press BOOT while running. |
+| No updates after a Windows restart | Run `Start Monitor.ps1` again. |
+
+If needed, restore LILYGO's [official factory demo](https://github.com/Xinyuan-LilyGO/T-Dongle-S3/tree/main/firmware).
+Do not change eFuses to recover a normal firmware problem.
+
+## Project files
+
+```text
+src/main.cpp          ESP32-S3 firmware and ring display
+platformio.ini        Pinned build and display configuration
+monitor.py            Windows metrics and USB sender
+Setup.ps1             Local Python environment setup
+Start Monitor.ps1     Launch the helper hidden
+Stop Monitor.ps1      Stop this project's helper
+requirements*.txt     Runtime and build dependencies
+docs/hero.png         Illustrated README banner
+```
+
+## References
+
+- [LILYGO T-Dongle-S3](https://github.com/Xinyuan-LilyGO/T-Dongle-S3)
+- [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI)
+- [Windows GetSystemTimes](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getsystemtimes)
+- [Windows GlobalMemoryStatusEx](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-globalmemorystatusex)
+- [NVIDIA nvidia-smi](https://docs.nvidia.com/deploy/nvidia-smi/)
