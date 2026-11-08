@@ -99,18 +99,46 @@ If PowerShell says a script is blocked, review the scripts first. To unblock onl
 these downloaded files, run the following in the project folder and retry:
 
 ```powershell
-Unblock-File -LiteralPath '.\Setup.ps1', '.\Start Monitor.ps1', '.\Stop Monitor.ps1'
+Unblock-File -LiteralPath '.\Setup.ps1', '.\Start Monitor.ps1', '.\Stop Monitor.ps1', '.\Install Startup.ps1', '.\Remove Startup.ps1'
 ```
 
 An organizational execution policy may still prevent scripts from running;
 contact its administrator rather than changing machine-wide security settings.
 
-After restarting Windows, run `Start Monitor.ps1` again. No automatic startup
-task is installed. To stop the helper, run `& '.\Stop Monitor.ps1'`.
+After restarting Windows, run `Start Monitor.ps1` again, or enable automatic
+startup with the optional step below. To stop readings, run `& '.\Stop Monitor.ps1'`.
 
 If the display stays on `--`, make sure ESP Launchpad has released the serial
 port and inspect `.pio/monitor.log`. NVIDIA GPU readings require the NVIDIA
 driver's `nvidia-smi`; CPU and MEM still work without it.
+
+### 3. Optional: start automatically when you sign in
+
+After setup, run this once from the project folder:
+
+```powershell
+& '.\Install Startup.ps1'
+```
+
+This creates a **LILYGO PC Stat** shortcut in your personal Windows Startup
+folder. The helper starts hidden when you sign in, without administrator access.
+It waits for the dongle if USB is not ready yet. Running the installer again
+updates the same shortcut; the launcher checks for an existing helper.
+Automatic startup is optional and is not enabled by `Setup.ps1` alone.
+
+**Keep the extracted project folder in place.** The shortcut points to it.
+If you move the folder, rerun setup and the startup installer from the new location.
+The shortcut uses a process-only execution-policy override for the launcher;
+it does not change your machine's PowerShell policy.
+
+To disable automatic startup:
+
+```powershell
+& '.\Remove Startup.ps1'
+```
+
+Removal deletes only this project's Startup shortcut. It does not stop a helper
+that is already running; use `& '.\Stop Monitor.ps1'` for that.
 
 ## Developer setup and building from source
 
@@ -166,8 +194,8 @@ The helper runs hidden and discovers the dongle automatically. To stop it:
 & '.\Stop Monitor.ps1'
 ```
 
-Logs are stored in `.pio/monitor.log`. No Windows startup task is installed;
-run the launcher again after restarting Windows.
+Logs are stored in `.pio/monitor.log`. To start at Windows sign-in, run
+`& '.\Install Startup.ps1'` once. Otherwise run the launcher after restarting Windows.
 
 Diagnostics, with the background helper stopped:
 
@@ -245,7 +273,7 @@ correctly with this core. Removing it can stall initialization and leave a black
 | Upload times out | Hold BOOT during insertion, release it, then retry. |
 | Black screen after flashing | Reinsert without BOOT; confirm the board model and `USE_FSPI_PORT`. |
 | Screen upside down | Briefly press BOOT while running. |
-| No updates after a Windows restart | Run `Start Monitor.ps1` again. |
+| No updates after a Windows restart | Run `Start Monitor.ps1`, or enable sign-in startup with `Install Startup.ps1`. If the project folder moved, reinstall the shortcut from its new location. |
 
 If needed, restore LILYGO's [official factory demo](https://github.com/Xinyuan-LilyGO/T-Dongle-S3/tree/main/firmware).
 Do not change eFuses to recover a normal firmware problem.
@@ -259,6 +287,8 @@ monitor.py            Windows metrics and USB sender
 Setup.ps1             Local Python environment setup
 Start Monitor.ps1     Launch the helper hidden
 Stop Monitor.ps1      Stop this project's helper
+Install Startup.ps1   Enable optional startup at Windows sign-in
+Remove Startup.ps1    Disable startup without stopping current readings
 requirements*.txt     Runtime and build dependencies
 firmware/             Merged download, checksum and browser-flasher configuration
 scripts/              Reproducible firmware packaging target

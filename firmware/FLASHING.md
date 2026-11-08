@@ -21,4 +21,11 @@ folder and run `./Setup.ps1`, followed by `& './Start Monitor.ps1'`.
 The helper must run on the Windows PC you want to monitor. NVIDIA's driver-provided
 `nvidia-smi` supplies GPU readings; CPU and RAM still work without it.
 
+To start the helper automatically whenever you sign in to Windows, run
+`& './Install Startup.ps1'` once after setup. Keep the extracted project folder
+in place. To disable automatic startup, run `& './Remove Startup.ps1'`.
+These scripts manage only your personal Startup shortcut and need no administrator
+access. Removing startup does not stop readings already running; use
+`& './Stop Monitor.ps1'` for that.
+
 Full instructions: https://github.com/ayhanyildiz/lilygo-pc-stat#readme
